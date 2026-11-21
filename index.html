@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>가족불꽃놀이</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #02030a 0%, #0a1030 60%, #1a1445 100%);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .star {
+    position: fixed;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: twinkle 3s infinite ease-in-out;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.9; }
+  }
+  canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  h1 {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 6vh);
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    font-size: clamp(2.2rem, 9vw, 4.5rem);
+    letter-spacing: 0.15em;
+    color: #fff;
+    text-shadow: 0 0 12px #8fb4ff, 0 0 30px #5a7cff, 0 0 60px #3a4cff;
+    pointer-events: none;
+  }
+  .hint {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh);
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+    pointer-events: none;
+    transition: opacity 1s;
+  }
+</style>
+</head>
+<body>
+  <h1>온가족 불꽃놀이</h1>
+  <canvas id="c"></canvas>
+  <div class="hint" id="hint">화면을 눌러 보세요</div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var hint = document.getElementById('hint');
+  var w = 0, h = 0;
+  var particles = [];
+
+  // 별 만들기
+  for (var i = 0; i < 90; i++) {
+    var s = document.createElement('div');
+    var size = Math.random() * 2 + 1;
+    s.className = 'star';
+    s.style.width = s.style.height = size + 'px';
+    s.style.left = Math.random() * 100 + 'vw';
+    s.style.top = Math.random() * 100 + 'vh';
+    s.style.animationDelay = (Math.random() * 3) + 's';
+    s.style.animationDuration = (2 + Math.random() * 3) + 's';
+    document.body.appendChild(s);
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function burst(x, y) {
+    var baseHue = Math.random() * 360;
+    var count = 80 + Math.floor(Math.random() * 40);
+    var multi = Math.random() < 0.4; // 여러 색이 섞인 불꽃
+    var ring = Math.random() < 0.3;  // 동그란 고리 모양
+    for (var i = 0; i < count; i++) {
+      var angle = Math.random() * Math.PI * 2;
+      var speed = ring ? 4.5 : Math.random() * 5 + 1;
+      particles.push({
+        x: x,
+        y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        decay: Math.random() * 0.012 + 0.008,
+        hue: multi ? Math.random() * 360 : baseHue + (Math.random() * 30 - 15),
+        size: Math.random() * 1.8 + 1.2
+      });
+    }
+    // 터지는 순간의 반짝임
+    particles.push({ x: x, y: y, vx: 0, vy: 0, life: 1, decay: 0.12, hue: baseHue, size: 22, flash: true });
+  }
+
+  function onPress(e) {
+    e.preventDefault();
+    burst(e.clientX, e.clientY);
+    hint.style.opacity = '0';
+  }
+  window.addEventListener('pointerdown', onPress, { passive: false });
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min((now - last) / 16.67, 3);
+    last = now;
+
+    // 잔상 효과: 이전 프레임을 조금씩 지움
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      if (!p.flash) {
+        p.vx *= Math.pow(0.975, dt);
+        p.vy *= Math.pow(0.975, dt);
+        p.vy += 0.05 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+      p.life -= p.decay * dt;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+      var alpha = Math.max(p.life, 0);
+      if (p.flash) {
+        var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+        g.addColorStop(0, 'hsla(' + p.hue + ', 100%, 85%, ' + alpha + ')');
+        g.addColorStop(1, 'hsla(' + p.hue + ', 100%, 60%, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = 'hsla(' + p.hue + ', 100%, 62%, ' + alpha + ')';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
